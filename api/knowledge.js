@@ -1,0 +1,47 @@
+const knowledge = {
+  keywords: {
+    "jam buka": "jam buka",
+    "jam operasional": "jam buka",
+    "buka jam": "jam buka",
+    "alamat": "alamat",
+    "lokasi": "alamat",
+    "toko dimana": "alamat",
+    "cara pesan": "cara pesan",
+    "cara order": "cara pesan",
+    "order": "cara pesan",
+    "beli": "cara pesan",
+    "kontak": "kontak",
+    "nomor telepon": "kontak",
+    "customer service": "kontak",
+    "pengiriman": "pengiriman",
+    "ekspedisi": "pengiriman",
+    "ongkir": "pengiriman",
+    "kurir": "pengiriman",
+    "garansi": "garansi",
+    "retur": "garansi",
+    "tukar ukuran": "garansi",
+    "ukuran": "ukuran",
+    "size chart": "ukuran",
+    "panduan ukuran": "ukuran",
+    "shopee": "shopee",
+    "link shopee": "shopee"
+  },
+  responses: {
+    "jam buka": "Lapak kami melayani pemesanan setiap hari Senin - Sabtu pukul 08.00 - 21.00 WIB, dan Minggu pukul 09.00 - 17.00 WIB. Pesanan sebelum pukul 15.00 WIB dikirim di hari yang sama.",
+    "alamat": "Kantor dan Gudang Pengiriman kami berlokasi di Jl. Sentra Sepatu No. 88, Cibaduyut, Bandung, Jawa Barat (Pusat Kerajinan Sepatu & Kulit Indonesia).",
+    "cara pesan": "Untuk pemesanan, Anda dapat langsung mengklik link produk Shopee yang kami berikan atau memesan lewat chat ini dengan format: Nama Produk, Ukuran (Size), dan Alamat Lengkap.",
+    "kontak": "Informasi Kontak Resmi Lapak Sepatu Pria Shopee:\n📍 *Gudang/Kantor:* Jl. Sentra Sepatu No. 88, Cibaduyut, Bandung\n📞 *WhatsApp CS:* (021) 555-0199 / Chat WhatsApp ini\n🛍️ *Lapak Shopee:* shopee.co.id/list/Sepatu%20Pria\n⏰ *Jam Operasional:* Senin - Sabtu (08.00 - 21.00 WIB), Minggu (09.00 - 17.00 WIB)",
+    "pengiriman": "Pengiriman dilakukan setiap hari kerja menggunakan Shopee Xpress, J&T Express, SiCepat, dan JNE. Estimasi tiba 1-3 hari kerja untuk wilayah Jabodetabek & Jawa, dan 2-5 hari untuk luar pulau.",
+    "garansi": "Kami memberikan garansi 100% ganti baru jika barang cacat produksi serta fasilitas *Tukar Ukuran (Size Exchange)* dalam 3 hari setelah barang diterima, dengan syarat kondisi sepatu masih baru dan belum dipakai outdoor.",
+    "ukuran": "Panduan Standar Ukuran Sepatu Pria (Panjang Kaki):\n• Size 39: 24,5 cm\n• Size 40: 25,0 cm\n• Size 41: 26,0 cm\n• Size 42: 26,5 cm\n• Size 43: 27,5 cm\n• Size 44: 28,0 cm\nDisarankan memilih size yang biasa Anda kenakan sehari-hari.",
+    "shopee": "Kunjungi etalase resmi kami di Shopee untuk promo cashback, gratis ongkir, dan cicilan 0% melalui tautan Shopee pada masing-masing produk atau via website katalog kami."
+  }
+};
+
+module.exports = function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  if (req.method === "OPTIONS") return res.status(200).end();
+
+  res.status(200).json(knowledge);
+};
