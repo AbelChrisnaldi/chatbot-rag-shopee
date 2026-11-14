@@ -29,19 +29,44 @@ function formatWhatsAppText(text) {
   return formatted.replace(/\n{3,}/g, "\n\n").trim();
 }
 
+const stopWords = new Set(["sepatu", "pria", "yang", "ada", "apakah", "jual", "dong", "buat", "untuk", "warna", "bisa", "kami", "atau", "saya", "halo", "min", "ini", "itu", "dan", "dari", "ke", "di", "mau", "rekomendasi", "toko", "punya"]);
+const outOfScopeItems = ["jaket", "celana", "jeans", "baju", "kaos", "tas", "dompet", "topi", "jam", "kacamata", "parfum", "helm", "sarung", "kemeja"];
+
 function findRAGContext(query) {
   const q = query.toLowerCase();
-  const matched = products.filter(p => {
-    const text = `${p.nama} ${p.kategori} ${p.deskripsi} ${p.harga}`.toLowerCase();
-    const words = q.split(/\s+/).filter(w => w.length > 2);
-    return words.some(w => text.includes(w));
+
+  // 1. Deteksi jika menanyakan barang di luar etalase sepatu
+  const foundOutOfScope = outOfScopeItems.filter(item => q.includes(item));
+  if (foundOutOfScope.length > 0) {
+    return {
+      outOfScope: true,
+      items: foundOutOfScope.join(", "),
+      context: ""
+    };
+  }
+
+  // 2. Filter kata kunci pencarian yang spesifik
+  const words = q.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+
+  const scored = products.map(p => {
+    const text = `${p.nama} ${p.kategori} ${p.deskripsi}`.toLowerCase();
+    let score = 0;
+    for (const w of words) {
+      if (text.includes(w)) score += 1;
+    }
+    return { product: p, score };
   });
 
-  const list = matched.length > 0 ? matched : products.slice(0, 4);
-  return list.map(p => {
+  scored.sort((a, b) => b.score - a.score);
+  const matched = scored.filter(s => s.score > 0).map(s => s.product);
+  const list = matched.length > 0 ? matched.slice(0, 3) : products.slice(0, 3);
+
+  const context = list.map(p => {
     const hargaFmt = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(p.harga));
     return `• *${p.nama}* [Kategori: ${p.kategori}]\n  Harga: ${hargaFmt}\n  Deskripsi: ${p.deskripsi}\n  Link Shopee: ${p.link}`;
   }).join("\n\n");
+
+  return { outOfScope: false, context, matchedCount: matched.length };
 }
 
 module.exports = async function handler(req, res) {
@@ -73,10 +98,18 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // Groq AI Completion
+  // Groq AI Completion & RAG
+  const ragResult = findRAGContext(message);
+
+  if (ragResult.outOfScope) {
+    return res.status(200).json({
+      reply: `Mohon maaf kak! Toko resmi *Aura Footwear* saat ini khusus melayani penjualan aneka *sepatu pria* (pantofel kerja, safety proyek, kasual, dan sneakers). Kami belum menyediakan ${ragResult.items}. 🙏\n\nJika kakak membutuhkan rekomendasi sepatu kerja kantor atau safety proyek, silakan tanyakan pada kami ya! 😊`
+    });
+  }
+
   const apiKey = process.env.GROQ_API_KEY;
-  const modelToUse = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
-  const ragContext = findRAGContext(message);
+  const modelToUse = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const ragContext = ragResult.context;
 
   if (!apiKey) {
     return res.status(200).json({
@@ -89,7 +122,7 @@ module.exports = async function handler(req, res) {
     const systemPrompt = `Anda adalah asisten konsultan toko resmi "Aura Footwear & Shoes Official" di Shopee.
 Jawab dengan ramah, sopan, to the point, dan sangat rapi dalam format pesan WhatsApp.
 
-ATURAN FORMAT:
+ATURAN PENTING:
 1. Gunakan SATU bintang untuk cetak tebal, contoh: *teks tebal*.
 2. Gunakan bullet point (•) untuk mendaftar produk.
 3. Sertakan harga dan link Shopee ketika merekomendasikan produk.
