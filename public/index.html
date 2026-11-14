@@ -21,6 +21,15 @@
         <button id="startBtn">Mulai Bot</button>
         <button id="stopBtn" class="hidden">Hentikan Bot</button>
         <button id="resetBtn" title="Hapus sesi WA yang nyangkut / logout">Reset Sesi WA</button>
+        <button id="serverConfigBtn" type="button" style="background:#4a5568;" title="Pengaturan URL Server Cloud Render">⚙️ Server Cloud</button>
+      </div>
+
+      <div id="serverConfigSection" class="hidden" style="margin-top:14px;padding:12px;background:#edf2f7;border-radius:8px;">
+        <label for="backendUrlInput" style="font-size:12px;font-weight:600;color:#4a5568;display:block;margin-bottom:6px;">URL Server Backend Render (Contoh: https://chatbot-rag-shopee.onrender.com):</label>
+        <div style="display:flex;gap:8px;">
+          <input type="url" id="backendUrlInput" placeholder="Biarkan kosong untuk server default" style="flex:1;padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;font-size:13px;">
+          <button id="saveBackendUrlBtn" type="button" style="padding:8px 16px;background:#3182ce;font-size:13px;">Simpan</button>
+        </div>
       </div>
     </section>
 
@@ -118,6 +127,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=2.5"></script>
+  <script src="app.js?v=2.6"></script>
 </body>
 </html>

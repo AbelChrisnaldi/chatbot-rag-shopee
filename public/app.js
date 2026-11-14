@@ -1,4 +1,6 @@
-const API_URL = "/api";
+let customBackend = localStorage.getItem("CUSTOM_BACKEND_URL") || "";
+let API_URL = customBackend ? `${customBackend.replace(/\/+$/, "")}/api` : "/api";
+
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const resetBtn = document.getElementById("resetBtn");
@@ -7,6 +9,32 @@ const statusDot = document.getElementById("statusDot");
 const qrSection = document.getElementById("qrSection");
 const readySection = document.getElementById("readySection");
 const botNumberText = document.getElementById("botNumberText");
+
+const serverConfigBtn = document.getElementById("serverConfigBtn");
+const serverConfigSection = document.getElementById("serverConfigSection");
+const backendUrlInput = document.getElementById("backendUrlInput");
+const saveBackendUrlBtn = document.getElementById("saveBackendUrlBtn");
+
+if (backendUrlInput) backendUrlInput.value = customBackend;
+
+if (serverConfigBtn && serverConfigSection) {
+  serverConfigBtn.onclick = () => {
+    serverConfigSection.classList.toggle("hidden");
+  };
+}
+
+if (saveBackendUrlBtn && backendUrlInput) {
+  saveBackendUrlBtn.onclick = () => {
+    const val = backendUrlInput.value.trim();
+    if (val) {
+      localStorage.setItem("CUSTOM_BACKEND_URL", val);
+    } else {
+      localStorage.removeItem("CUSTOM_BACKEND_URL");
+    }
+    alert("URL Server berhasil disimpan! Halaman akan memuat ulang.");
+    window.location.reload();
+  };
+}
 
 const knowledgeList = document.getElementById("knowledgeList");
 const productsBody = document.getElementById("productsBody");
