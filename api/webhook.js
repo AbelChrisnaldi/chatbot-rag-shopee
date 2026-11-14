@@ -125,7 +125,7 @@ ${ragContext}`;
   }
 
   // 4. Jika ada token Fonnte, kita kirimkan via API Fonnte
-  const fonnteToken = process.env.FONNTE_TOKEN;
+  const fonnteToken = process.env.FONNTE_TOKEN || "bEkcpRQv1AhK4uK5PsZX";
   if (fonnteToken && sender) {
     try {
       const fetch = global.fetch || require("node-fetch");
