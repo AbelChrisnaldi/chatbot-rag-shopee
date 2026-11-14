@@ -29,6 +29,15 @@ function formatWhatsAppText(text) {
   return formatted.replace(/\n{3,}/g, "\n\n").trim();
 }
 
+function getCleanShopeeLink(rawLink) {
+  if (!rawLink) return "https://shopee.co.id/list/Sepatu%20Pria";
+  const match = rawLink.match(/-i\.(\d+)\.(\d+)/);
+  if (match) {
+    return `https://shopee.co.id/product/${match[1]}/${match[2]}`;
+  }
+  return rawLink;
+}
+
 const stopWords = new Set([
   "sepatu", "sepeatu", "spatu", "sepatuu", "shoes", "shoe", "pria", "yang", "ada", "apakah", "jual",
   "dong", "buat", "untuk", "warna", "bisa", "kami", "atau", "saya", "halo", "min", "ini",
@@ -107,15 +116,12 @@ function findRAGContext(query) {
 
   let context = list.map((p, idx) => {
     const hargaFmt = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(p.harga));
+    const link = getCleanShopeeLink(p.link);
     if (isCatalogQuery || list.length === 10) {
-      return `${idx + 1}. *${p.nama}* [${p.kategori}] - ${hargaFmt}`;
+      return `${idx + 1}. *${p.nama}*\n   Harga: ${hargaFmt}\n   Link: ${link}`;
     }
-    return `• *${p.nama}* [Kategori: ${p.kategori}]\n  Harga: ${hargaFmt}\n  Deskripsi: ${p.deskripsi}\n  Link Shopee: ${p.link}`;
+    return `• *${p.nama}* [Kategori: ${p.kategori}]\n  Harga: ${hargaFmt}\n  Deskripsi: ${p.deskripsi}\n  Link: ${link}`;
   }).join("\n\n");
-
-  if (isCatalogQuery || list.length === 10) {
-    context += "\n\nLink Lapak Shopee Resmi: https://shopee.co.id/list/Sepatu%20Pria";
-  }
 
   return { outOfScope: false, context, matchedCount: list.length, isAll: (isCatalogQuery || list.length === 10) };
 }
@@ -197,10 +203,10 @@ Jawab dengan ramah, sopan, to the point, dan sangat rapi dalam format pesan What
 
 ATURAN PENTING:
 1. Gunakan SATU bintang untuk cetak tebal, contoh: *teks tebal*.
-2. Gunakan bullet point (•) atau nomor untuk mendaftar produk.
-3. Sertakan harga dan link Shopee ketika merekomendasikan produk.
+2. Gunakan nomor atau bullet point untuk mendaftar produk.
+3. Selalu cantumkan nama, harga Rupiah resmi, dan link Shopee ketika merekomendasikan atau mendaftar produk.
 4. Jawab HANYA berdasarkan konteks produk resmi di bawah.
-5. Jika pengguna menanyakan seluruh katalog, daftar produk, atau sepatu apa saja yang stok/tersedia, tampilkan SELURUH 10 PRODUK SEPATU di konteks secara ringkas, rapi, dan lengkap!
+5. Jika pengguna menanyakan seluruh katalog, daftar produk, atau sepatu apa saja yang stok/tersedia, tampilkan SELURUH 10 PRODUK SEPATU di konteks secara lengkap dari nomor 1 sampai 10 dengan nama, harga, dan link Shopee resminya masing-masing!
 6. PENTING: Jika pengguna menanyakan barang di luar produk sepatu (seperti laptop, hp, elektronik, makanan, pakaian, dll) atau jika produk tidak tersedia di katalog, TOLAK DENGAN RAMAH dan jelaskan bahwa toko hanya menjual sepatu pria. JANGAN PERNAH merekomendasikan sepatu jika pengguna tidak mencari sepatu!
 
 KONTEKS PRODUK RESMI SHOPEE:
@@ -212,7 +218,7 @@ ${ragContext}`;
         { role: "system", content: systemPrompt },
         { role: "user", content: message }
       ],
-      max_tokens: 650
+      max_tokens: 850
     });
 
     const replyText = completion.choices[0]?.message?.content || "Mohon maaf, terjadi kendala teknis. Silakan tanyakan kembali.";
