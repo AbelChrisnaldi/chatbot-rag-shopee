@@ -224,7 +224,3 @@ ${ragContext}`;
     message: replyText
   });
 };
-      message: replyText
-    }
-  });
-};
