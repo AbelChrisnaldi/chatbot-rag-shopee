@@ -29,8 +29,20 @@ function formatWhatsAppText(text) {
   return formatted.replace(/\n{3,}/g, "\n\n").trim();
 }
 
-const stopWords = new Set(["sepatu", "pria", "yang", "ada", "apakah", "jual", "dong", "buat", "untuk", "warna", "bisa", "kami", "atau", "saya", "halo", "min", "ini", "itu", "dan", "dari", "ke", "di", "mau", "rekomendasi", "toko", "punya"]);
-const outOfScopeItems = ["jaket", "celana", "jeans", "baju", "kaos", "tas", "dompet", "topi", "jam", "kacamata", "parfum", "helm", "sarung", "kemeja"];
+const stopWords = new Set([
+  "sepatu", "pria", "yang", "ada", "apakah", "jual", "dong", "buat", "untuk",
+  "warna", "bisa", "kami", "atau", "saya", "halo", "min", "ini", "itu", "dan",
+  "dari", "ke", "di", "mau", "rekomendasi", "toko", "punya", "apa", "aja",
+  "saja", "kak", "gan", "mas", "koleksi", "katalog", "daftar", "produk",
+  "terbaik", "paling", "bagus", "mana", "sih", "ya", "kan", "gimana",
+  "bagaimana", "tolong", "kasih", "info", "minta", "lihat", "cari"
+]);
+
+const outOfScopeItems = [
+  "laptop", "komputer", "pc", "hp", "handphone", "smartphone", "iphone", "samsung",
+  "jaket", "celana", "jeans", "baju", "kaos", "tas", "dompet", "topi", "jam",
+  "kacamata", "parfum", "helm", "sarung", "kemeja", "makanan", "minuman", "snack"
+];
 
 function findRAGContext(query) {
   const q = query.toLowerCase();
@@ -59,6 +71,16 @@ function findRAGContext(query) {
 
   scored.sort((a, b) => b.score - a.score);
   const matched = scored.filter(s => s.score > 0).map(s => s.product);
+
+  // 3. Jika pengguna mencari kata kunci spesifik tetapi tidak ada satu pun produk sepatu yang cocok
+  if (words.length > 0 && matched.length === 0) {
+    return {
+      outOfScope: true,
+      items: words.join(", "),
+      context: ""
+    };
+  }
+
   const list = matched.length > 0 ? matched.slice(0, 3) : products.slice(0, 3);
 
   const context = list.map(p => {
@@ -126,7 +148,8 @@ ATURAN PENTING:
 1. Gunakan SATU bintang untuk cetak tebal, contoh: *teks tebal*.
 2. Gunakan bullet point (•) untuk mendaftar produk.
 3. Sertakan harga dan link Shopee ketika merekomendasikan produk.
-4. Jawab HANYA berdasarkan konteks produk resmi di bawah:
+4. Jawab HANYA berdasarkan konteks produk resmi di bawah.
+5. PENTING: Jika pengguna menanyakan barang di luar produk sepatu (seperti laptop, hp, elektronik, makanan, pakaian, dll) atau jika produk tidak tersedia di katalog, TOLAK DENGAN RAMAH dan jelaskan bahwa toko hanya menjual sepatu pria. JANGAN PERNAH merekomendasikan sepatu jika pengguna tidak mencari sepatu!
 
 KONTEKS PRODUK RESMI SHOPEE:
 ${ragContext}`;
