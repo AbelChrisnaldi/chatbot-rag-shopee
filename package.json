@@ -1,0 +1,33 @@
+{
+  "name": "chatbot-rag",
+  "version": "2.0.0",
+  "description": "Custom AI Chatbot RAG WhatsApp & Web Catalog untuk Toko Sepatu Pria Shopee",
+  "main": "server-v2.js",
+  "scripts": {
+    "start": "node server-v2.js",
+    "dev": "nodemon server-v2.js"
+  },
+  "keywords": [
+    "chatbot",
+    "whatsapp",
+    "rag",
+    "groq",
+    "llm",
+    "shopee",
+    "ecommerce"
+  ],
+  "author": "Kresna",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "groq-sdk": "^0.15.0",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
