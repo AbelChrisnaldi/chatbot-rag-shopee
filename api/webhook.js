@@ -46,18 +46,44 @@ function findRAGContext(query) {
 
 // Helper untuk membaca raw body jika Vercel belum melakukan parsing
 async function getRawBody(req) {
-  if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
-    return req.body;
+  if (req.body) {
+    if (typeof req.body === "object") return req.body;
+    if (typeof req.body === "string") {
+      try {
+        return JSON.parse(req.body);
+      } catch (e) {
+        try {
+          const params = new URLSearchParams(req.body);
+          const obj = {};
+          for (const [k, v] of params.entries()) obj[k] = v;
+          return obj;
+        } catch (e2) {
+          return { raw: req.body };
+        }
+      }
+    }
   }
+
   return new Promise((resolve) => {
     let data = "";
+    let resolved = false;
+
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve({});
+      }
+    }, 1000);
+
     req.on("data", chunk => { data += chunk; });
     req.on("end", () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
       if (!data) return resolve({});
       try {
         resolve(JSON.parse(data));
       } catch (e) {
-        // Coba urlencoded
         try {
           const params = new URLSearchParams(data);
           const obj = {};
@@ -88,18 +114,26 @@ module.exports = async function handler(req, res) {
 
   // Parse body dari berbagai kemungkinan format Fonnte
   const parsedBody = await getRawBody(req);
-  const body = Object.keys(parsedBody).length > 0 ? parsedBody : (req.body || {});
+  const body = (typeof parsedBody === "object" && Object.keys(parsedBody).length > 0) ? parsedBody : (req.body || {});
 
-  let message = (body.message || body.text || "").trim();
-  let sender = (body.sender || body.from || "").trim();
+  let message = (body.message || body.pesan || body.text || "").trim();
+  let sender = (body.sender || body.pengirim || body.from || "").trim();
 
   // Jika payload Fonnte berupa string multipart / raw
   if (!message && body.raw) {
-    const msgMatch = body.raw.match(/name="message"[\r\n]+([^\r\n]+)/);
+    const msgMatch = body.raw.match(/name="message"[\r\n]+([^\r\n]+)/) || body.raw.match(/name="pesan"[\r\n]+([^\r\n]+)/);
     if (msgMatch) message = msgMatch[1].trim();
-    const senderMatch = body.raw.match(/name="sender"[\r\n]+([^\r\n]+)/);
+    const senderMatch = body.raw.match(/name="sender"[\r\n]+([^\r\n]+)/) || body.raw.match(/name="pengirim"[\r\n]+([^\r\n]+)/);
     if (senderMatch) sender = senderMatch[1].trim();
   }
+
+  // Jika masih kosong, coba periksa req.query
+  if (!message && req.query) {
+    message = (req.query.message || req.query.pesan || "").trim();
+    sender = sender || (req.query.sender || req.query.pengirim || "").trim();
+  }
+
+  console.log("Incoming Webhook - Sender:", sender, "Message:", message);
 
   if (!message) {
     return res.status(200).json({ status: true, message: "Tidak ada pesan" });
@@ -124,7 +158,7 @@ module.exports = async function handler(req, res) {
   // 3. Groq AI & RAG jika belum terjawab
   if (!replyText) {
     const apiKey = process.env.GROQ_API_KEY;
-    const modelToUse = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
+    const modelToUse = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
     const ragContext = findRAGContext(message);
 
     if (!apiKey) {
@@ -170,13 +204,14 @@ ${ragContext}`;
         method: "POST",
         headers: {
           Authorization: fonnteToken,
-          "Content-Type": "application/x-www-form-urlencoded"
+          "Content-Type": "application/json"
         },
-        body: new URLSearchParams({
+        body: JSON.stringify({
           target: sender,
           message: replyText
         })
       });
+      console.log("Berhasil memicu kirim balasan ke nomor:", sender);
     } catch (sendErr) {
       console.error("Gagal kirim via Fonnte API:", sendErr);
     }
@@ -186,7 +221,9 @@ ${ragContext}`;
   return res.status(200).json({
     reply: replyText,
     response: replyText,
-    data: {
+    message: replyText
+  });
+};
       message: replyText
     }
   });
