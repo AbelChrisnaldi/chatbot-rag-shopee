@@ -38,94 +38,6 @@ function getCleanShopeeLink(rawLink) {
   return rawLink;
 }
 
-const stopWords = new Set([
-  "sepatu", "sepeatu", "spatu", "sepatuu", "shoes", "shoe", "pria", "yang", "ada", "apakah", "jual",
-  "dong", "buat", "untuk", "warna", "bisa", "kami", "atau", "saya", "halo", "min", "ini",
-  "itu", "dan", "dari", "ke", "di", "mau", "rekomendasi", "toko", "punya", "apa", "aja",
-  "saja", "kak", "gan", "mas", "koleksi", "katalog", "daftar", "produk", "terbaik",
-  "paling", "bagus", "mana", "sih", "ya", "kan", "gimana", "bagaimana", "tolong",
-  "kasih", "info", "minta", "lihat", "cari", "stok", "stock", "ready", "semua", "etalase",
-  "lengkap", "semuanya", "tersedia", "list", "macam", "jenis", "model"
-]);
-
-const outOfScopeItems = [
-  "laptop", "komputer", "pc", "hp", "handphone", "smartphone", "iphone", "samsung",
-  "jaket", "celana", "jeans", "baju", "kaos", "tas", "dompet", "topi", "jam tangan", "arloji",
-  "kacamata", "parfum", "helm", "sarung", "kemeja", "makanan", "minuman", "snack"
-];
-
-function findRAGContext(query) {
-  let q = query.toLowerCase()
-    .replace(/\b(sepeatu|spatu|sepatuu)\b/g, "sepatu")
-    .replace(/\b(stok|stock|ready)\b/g, "tersedia");
-
-  // 1. Deteksi jika menanyakan barang di luar etalase sepatu
-  const foundOutOfScope = outOfScopeItems.filter(item => q.includes(item));
-  if (foundOutOfScope.length > 0) {
-    return {
-      outOfScope: true,
-      items: foundOutOfScope.join(", "),
-      context: ""
-    };
-  }
-
-  // 2. Deteksi apakah pengguna meminta seluruh katalog / daftar sepatu yang tersedia
-  const isCatalogQuery = (
-    q.includes("apa saja") || q.includes("apa aja") ||
-    q.includes("katalog") || q.includes("daftar") ||
-    q.includes("semua") || q.includes("list") ||
-    q.includes("koleksi") || q.includes("etalase") ||
-    q.includes("punya apa") || q.includes("ada apa") ||
-    q.includes("tersedia apa") || q.includes("stok apa") ||
-    q.includes("sepatu apa")
-  );
-
-  // 3. Filter kata kunci pencarian yang spesifik
-  const words = q.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
-
-  const scored = products.map(p => {
-    const text = `${p.nama} ${p.kategori} ${p.deskripsi}`.toLowerCase();
-    let score = 0;
-    for (const w of words) {
-      if (text.includes(w)) score += 1;
-    }
-    return { product: p, score };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-  const matched = scored.filter(s => s.score > 0).map(s => s.product);
-
-  let list = [];
-  if (isCatalogQuery) {
-    // Tampilkan seluruh 10 produk jika diminta katalog / stok / apa saja yang ada
-    list = products;
-  } else if (matched.length > 0) {
-    // Tampilkan produk yang cocok spesifik (maks 3 produk terbaik)
-    list = matched.slice(0, 3);
-  } else if (words.length > 0) {
-    // Pengguna mencari kata kunci tertentu di luar sepatu
-    return {
-      outOfScope: true,
-      items: words.join(", "),
-      context: ""
-    };
-  } else {
-    // Pertanyaan umum tanpa kata kunci spesifik
-    list = products;
-  }
-
-  let context = list.map((p, idx) => {
-    const hargaFmt = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(p.harga));
-    const link = getCleanShopeeLink(p.link);
-    if (isCatalogQuery || list.length === 10) {
-      return `${idx + 1}. *${p.nama}*\n   Harga: ${hargaFmt}\n   Link: ${link}`;
-    }
-    return `• *${p.nama}* [Kategori: ${p.kategori}]\n  Harga: ${hargaFmt}\n  Deskripsi: ${p.deskripsi}\n  Link: ${link}`;
-  }).join("\n\n");
-
-  return { outOfScope: false, context, matchedCount: list.length, isAll: (isCatalogQuery || list.length === 10) };
-}
-
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -139,94 +51,89 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "Pesan tidak boleh kosong." });
   }
 
-  const q = message.toLowerCase();
+  const q = message.toLowerCase().trim();
+  let replyText = "";
 
-  // Sapaan cepat
-  if (/^(halo|hai|hi|hey|p|pagi|siang|sore|malam|assalamu)/i.test(q) && q.split(" ").length <= 3) {
-    return res.status(200).json({
-      reply: "Halo! Selamat datang di *Aura Footwear & Shoes Official*, lapak resmi sepatu pria terpercaya di Shopee. 👞\n\nAda yang bisa kami bantu seputar koleksi sepatu formal, pantofel, kasual, atau safety kami hari ini? 😊"
-    });
+  // 1. Sapaan Cepat
+  if (/^(halo|hai|hi|hey|p|pagi|siang|sore|malam|assalamu)/i.test(q) && q.split(" ").length <= 4) {
+    replyText = "Halo! Selamat datang di *Aura Footwear & Shoes Official*, lapak resmi sepatu pria terpercaya di Shopee. 👞\n\nAda yang bisa kami bantu seputar koleksi sepatu formal, pantofel, kasual, atau safety kami hari ini? 😊";
+  } else if (/^(terima\s*kasih|terimakasih|makasih|matur\s*nuwun|tengkyu|thank\s*you|thanks|thx)/i.test(q)) {
+    // 2. Ucapan Terima Kasih
+    replyText = "Sama-sama Kak! Senang bisa membantu. Jika ada pertanyaan lain seputar sepatu pria kami atau ingin melakukan pemesanan, silakan tanyakan ya. Selamat berbelanja di *Aura Footwear*! 😊👞";
+  } else {
+    // 3. FAQ Cepat
+    if ((q.includes("jam") && q.includes("buka")) || q.includes("buka jam") || q.includes("operasional") || q.includes("tutup jam")) {
+      replyText = knowledgeResponses["jam buka"];
+    } else if (q.includes("alamat") || q.includes("lokasi") || q.includes("gudang") || q.includes("dimana toko") || q.includes("toko dimana")) {
+      replyText = knowledgeResponses["alamat"];
+    } else if (q.includes("cara pesan") || q.includes("cara beli") || q.includes("cara order") || q.includes("bagaimana cara")) {
+      replyText = knowledgeResponses["cara pesan"];
+    } else if (q.includes("kontak") || q.includes("hubungi") || q.includes("nomor cs") || q.includes("admin")) {
+      replyText = knowledgeResponses["kontak"];
+    } else if (q.includes("pengiriman") || q.includes("ekspedisi") || q.includes("kurir") || q.includes("ongkir")) {
+      replyText = knowledgeResponses["pengiriman"];
+    } else if (q.includes("garansi") || q.includes("retur") || q.includes("tukar size") || q.includes("tukar ukuran")) {
+      replyText = knowledgeResponses["garansi"];
+    } else if (q.includes("panduan ukuran") || q.includes("size chart") || (q.includes("ukuran") && q.includes("sepatu"))) {
+      replyText = knowledgeResponses["ukuran"];
+    }
   }
 
-  // FAQ Cepat
-  let faqReply = "";
-  if ((q.includes("jam") && q.includes("buka")) || q.includes("buka jam") || q.includes("operasional") || q.includes("tutup jam")) {
-    faqReply = knowledgeResponses["jam buka"];
-  } else if (q.includes("alamat") || q.includes("lokasi") || q.includes("gudang") || q.includes("dimana toko") || q.includes("toko dimana")) {
-    faqReply = knowledgeResponses["alamat"];
-  } else if (q.includes("cara pesan") || q.includes("cara beli") || q.includes("cara order")) {
-    faqReply = knowledgeResponses["cara pesan"];
-  } else if (q.includes("kontak") || q.includes("hubungi") || q.includes("nomor cs")) {
-    faqReply = knowledgeResponses["kontak"];
-  } else if (q.includes("pengiriman") || q.includes("ekspedisi") || q.includes("kurir") || q.includes("ongkir")) {
-    faqReply = knowledgeResponses["pengiriman"];
-  } else if (q.includes("garansi") || q.includes("retur") || q.includes("tukar size") || q.includes("tukar ukuran")) {
-    faqReply = knowledgeResponses["garansi"];
-  } else if (q.includes("panduan ukuran") || q.includes("size chart") || (q.includes("ukuran") && q.includes("sepatu"))) {
-    faqReply = knowledgeResponses["ukuran"];
-  } else {
-    for (const [key, resp] of Object.entries(knowledgeResponses)) {
-      if (q.includes(key)) {
-        faqReply = resp;
-        break;
+  // 4. Groq AI & RAG
+  if (!replyText) {
+    const apiKey = process.env.GROQ_API_KEY;
+    const modelToUse = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
+
+    const catalogContext = products.map((p, idx) => {
+      const hargaFmt = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(p.harga));
+      const link = getCleanShopeeLink(p.link);
+      return `${idx + 1}. *${p.nama}* [Kategori: ${p.kategori}]\n   Harga: ${hargaFmt}\n   Deskripsi: ${p.deskripsi}\n   Link: ${link}`;
+    }).join("\n\n");
+
+    if (!apiKey) {
+      replyText = `Halo! 👞 Berikut rekomendasi produk dari etalase Shopee kami:\n\n${catalogContext}\n\nSilakan klik link Shopee di atas untuk info pemesanan lengkap! 😊`;
+    } else {
+      try {
+        const groq = new Groq({ apiKey });
+        const systemPrompt = `Anda adalah asisten virtual resmi customer service "Aura Footwear & Shoes Official" di Shopee.
+Toko kami HANYA melayani penjualan sepatu pria berkualitas (pantofel kerja, sepatu formal, kasual, sneakers, dan safety proyek).
+
+PANDUAN MENJAWAB:
+1. Bersikap ramah, sopan, to the point, dan profesional layaknya admin WhatsApp resmi.
+2. Format cetak tebal WhatsApp menggunakan satu bintang, contoh: *teks tebal*.
+3. Jika merekomendasikan produk, sebutkan nama produk, harga Rupiah resmi, dan link Shopee resminya.
+4. PERTANYAAN KATALOG / HARGA / REKOMENDASI:
+   - Jika ditanya "List produk", "daftar", atau "katalog", sebutkan seluruh 10 produk dengan nama, harga, dan link masing-masing.
+   - Jika ditanya mana produk "paling murah" / "termurah", jawab bahwa produk paling murah adalah *Barbarush Sepatu Slop Pantofel Pria Formal Terlaris* seharga Rp 64.238 lengkap dengan link Shopee-nya.
+   - Jika ditanya produk "paling mahal" / "termahal", jawab bahwa produk paling mahal adalah *Sepatu Pantofel Kulit Big Size Pria Bisnis 2046* seharga Rp 189.000 lengkap dengan link Shopee-nya.
+   - Jika ditanya rekomendasi produk "terlaris" atau "paling bagus", berikan rekomendasi terbaik dari katalog (misal *Barbarush Sepatu Slop Pantofel Pria Formal Terlaris* atau *Sepatu Pantofel Pria Hitam Kulit Kerja Kantor J-TK018*) dengan harga dan link.
+   - Jika ditanya rekomendasi kategori tertentu (misal safety, pantofel kantor, sneakers kasual), berikan produk yang sesuai kategori tersebut beserta harga dan link.
+   - Jika ditanya "link produk", berikan link produk sepatu yang dimaksud.
+   - Jika ditanya budget (misal budget Rp 50.000), jelaskan dengan sopan bahwa produk termurah kami mulai dari Rp 64.238 (*Barbarush Sepatu Slop Pantofel*), sehingga untuk budget Rp 50.000 belum mencukupi dan sarankan menaikkan budget sedikit.
+5. PERTANYAAN DI LUAR TOKO / KODING / MATEMATIKA:
+   - Jika ditanya barang selain sepatu (misal kulkas Sharp 2 pintu, TV, laptop, baju, dll), tolak dengan sangat sopan bahwa toko kami khusus menjual sepatu pria dan tidak menyediakan barang tersebut.
+   - Jika ditanya perhitungan matematika (misal 999 * 1), jawab hasilnya singkat (999 * 1 = 999) lalu ingatkan dengan ramah bahwa Anda adalah asisten toko sepatu pria.
+   - Jika diminta membuat kodingan (misal Python, koding, skripsi), tolak dengan sopan bahwa Anda adalah customer service toko sepatu pria dan tidak melayani pembuatan kode/kodingan.
+
+KATALOG RESMI AURA FOOTWEAR:
+${catalogContext}`;
+
+        const completion = await groq.chat.completions.create({
+          model: modelToUse,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message }
+          ],
+          max_tokens: 850
+        });
+
+        replyText = formatWhatsAppText(completion.choices[0]?.message?.content || "");
+      } catch (err) {
+        console.error("Groq Chat Error:", err);
+        replyText = `Halo! 👞 Berikut rekomendasi produk dari katalog Shopee kami:\n\n${catalogContext}\n\nSilakan klik tautan Shopee di atas untuk melakukan pemesanan! 😊`;
       }
     }
   }
 
-  if (faqReply) {
-    return res.status(200).json({ reply: faqReply });
-  }
-
-  // Groq AI Completion & RAG
-  const ragResult = findRAGContext(message);
-
-  if (ragResult.outOfScope) {
-    return res.status(200).json({
-      reply: `Mohon maaf kak! Toko resmi *Aura Footwear* saat ini khusus melayani penjualan aneka *sepatu pria* (pantofel kerja, safety proyek, kasual, dan sneakers). Kami belum menyediakan ${ragResult.items}. 🙏\n\nJika kakak membutuhkan rekomendasi sepatu kerja kantor atau safety proyek, silakan tanyakan pada kami ya! 😊`
-    });
-  }
-
-  const apiKey = process.env.GROQ_API_KEY;
-  const modelToUse = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
-  const ragContext = ragResult.context;
-
-  if (!apiKey) {
-    return res.status(200).json({
-      reply: `Halo! 👞 Berikut rekomendasi produk dari etalase Shopee kami:\n\n${ragContext}\n\nAda model atau ukuran tertentu yang ingin Anda tanyakan lebih lanjut? 😊`
-    });
-  }
-
-  try {
-    const groq = new Groq({ apiKey });
-    const systemPrompt = `Anda adalah asisten konsultan toko resmi "Aura Footwear & Shoes Official" di Shopee.
-Jawab dengan ramah, sopan, to the point, dan sangat rapi dalam format pesan WhatsApp.
-
-ATURAN PENTING:
-1. Gunakan SATU bintang untuk cetak tebal, contoh: *teks tebal*.
-2. Gunakan nomor atau bullet point untuk mendaftar produk.
-3. Selalu cantumkan nama, harga Rupiah resmi, dan link Shopee ketika merekomendasikan atau mendaftar produk.
-4. Jawab HANYA berdasarkan konteks produk resmi di bawah.
-5. Jika pengguna menanyakan seluruh katalog, daftar produk, atau sepatu apa saja yang stok/tersedia, tampilkan SELURUH 10 PRODUK SEPATU di konteks secara lengkap dari nomor 1 sampai 10 dengan nama, harga, dan link Shopee resminya masing-masing!
-6. PENTING: Jika pengguna menanyakan barang di luar produk sepatu (seperti laptop, hp, elektronik, makanan, pakaian, dll) atau jika produk tidak tersedia di katalog, TOLAK DENGAN RAMAH dan jelaskan bahwa toko hanya menjual sepatu pria. JANGAN PERNAH merekomendasikan sepatu jika pengguna tidak mencari sepatu!
-
-KONTEKS PRODUK RESMI SHOPEE:
-${ragContext}`;
-
-    const completion = await groq.chat.completions.create({
-      model: modelToUse,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: message }
-      ],
-      max_tokens: 850
-    });
-
-    const replyText = completion.choices[0]?.message?.content || "Mohon maaf, terjadi kendala teknis. Silakan tanyakan kembali.";
-    return res.status(200).json({ reply: formatWhatsAppText(replyText) });
-  } catch (err) {
-    console.error("Groq Chat Error:", err);
-    return res.status(200).json({
-      reply: `Halo! 👞 Berikut rekomendasi produk dari katalog Shopee kami:\n\n${ragContext}\n\nSilakan klik tautan Shopee di atas untuk melakukan pemesanan! 😊`
-    });
-  }
+  return res.status(200).json({ reply: replyText });
 };
