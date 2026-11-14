@@ -40,7 +40,7 @@ const stopWords = new Set([
 
 const outOfScopeItems = [
   "laptop", "komputer", "pc", "hp", "handphone", "smartphone", "iphone", "samsung",
-  "jaket", "celana", "jeans", "baju", "kaos", "tas", "dompet", "topi", "jam",
+  "jaket", "celana", "jeans", "baju", "kaos", "tas", "dompet", "topi", "jam tangan", "arloji",
   "kacamata", "parfum", "helm", "sarung", "kemeja", "makanan", "minuman", "snack"
 ];
 
@@ -114,10 +114,32 @@ module.exports = async function handler(req, res) {
   }
 
   // FAQ Cepat
-  for (const [key, resp] of Object.entries(knowledgeResponses)) {
-    if (q.includes(key)) {
-      return res.status(200).json({ reply: resp });
+  let faqReply = "";
+  if ((q.includes("jam") && q.includes("buka")) || q.includes("buka jam") || q.includes("operasional") || q.includes("tutup jam")) {
+    faqReply = knowledgeResponses["jam buka"];
+  } else if (q.includes("alamat") || q.includes("lokasi") || q.includes("gudang") || q.includes("dimana toko") || q.includes("toko dimana")) {
+    faqReply = knowledgeResponses["alamat"];
+  } else if (q.includes("cara pesan") || q.includes("cara beli") || q.includes("cara order")) {
+    faqReply = knowledgeResponses["cara pesan"];
+  } else if (q.includes("kontak") || q.includes("hubungi") || q.includes("nomor cs")) {
+    faqReply = knowledgeResponses["kontak"];
+  } else if (q.includes("pengiriman") || q.includes("ekspedisi") || q.includes("kurir") || q.includes("ongkir")) {
+    faqReply = knowledgeResponses["pengiriman"];
+  } else if (q.includes("garansi") || q.includes("retur") || q.includes("tukar size") || q.includes("tukar ukuran")) {
+    faqReply = knowledgeResponses["garansi"];
+  } else if (q.includes("panduan ukuran") || q.includes("size chart") || (q.includes("ukuran") && q.includes("sepatu"))) {
+    faqReply = knowledgeResponses["ukuran"];
+  } else {
+    for (const [key, resp] of Object.entries(knowledgeResponses)) {
+      if (q.includes(key)) {
+        faqReply = resp;
+        break;
+      }
     }
+  }
+
+  if (faqReply) {
+    return res.status(200).json({ reply: faqReply });
   }
 
   // Groq AI Completion & RAG
@@ -130,7 +152,7 @@ module.exports = async function handler(req, res) {
   }
 
   const apiKey = process.env.GROQ_API_KEY;
-  const modelToUse = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const modelToUse = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
   const ragContext = ragResult.context;
 
   if (!apiKey) {

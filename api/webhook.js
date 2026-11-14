@@ -40,7 +40,7 @@ const stopWords = new Set([
 
 const outOfScopeItems = [
   "laptop", "komputer", "pc", "hp", "handphone", "smartphone", "iphone", "samsung",
-  "jaket", "celana", "jeans", "baju", "kaos", "tas", "dompet", "topi", "jam",
+  "jaket", "celana", "jeans", "baju", "kaos", "tas", "dompet", "topi", "jam tangan", "arloji",
   "kacamata", "parfum", "helm", "sarung", "kemeja", "makanan", "minuman", "snack"
 ];
 
@@ -194,10 +194,26 @@ module.exports = async function handler(req, res) {
     replyText = "Halo! Selamat datang di *Aura Footwear & Shoes Official*, lapak resmi sepatu pria terpercaya di Shopee. 👞\n\nAda yang bisa kami bantu seputar koleksi sepatu formal, pantofel, kasual, atau safety kami hari ini? 😊";
   } else {
     // 2. FAQ Cepat
-    for (const [key, resp] of Object.entries(knowledgeResponses)) {
-      if (q.includes(key)) {
-        replyText = resp;
-        break;
+    if ((q.includes("jam") && q.includes("buka")) || q.includes("buka jam") || q.includes("operasional") || q.includes("tutup jam")) {
+      replyText = knowledgeResponses["jam buka"];
+    } else if (q.includes("alamat") || q.includes("lokasi") || q.includes("gudang") || q.includes("dimana toko") || q.includes("toko dimana")) {
+      replyText = knowledgeResponses["alamat"];
+    } else if (q.includes("cara pesan") || q.includes("cara beli") || q.includes("cara order")) {
+      replyText = knowledgeResponses["cara pesan"];
+    } else if (q.includes("kontak") || q.includes("hubungi") || q.includes("nomor cs")) {
+      replyText = knowledgeResponses["kontak"];
+    } else if (q.includes("pengiriman") || q.includes("ekspedisi") || q.includes("kurir") || q.includes("ongkir")) {
+      replyText = knowledgeResponses["pengiriman"];
+    } else if (q.includes("garansi") || q.includes("retur") || q.includes("tukar size") || q.includes("tukar ukuran")) {
+      replyText = knowledgeResponses["garansi"];
+    } else if (q.includes("panduan ukuran") || q.includes("size chart") || (q.includes("ukuran") && q.includes("sepatu"))) {
+      replyText = knowledgeResponses["ukuran"];
+    } else {
+      for (const [key, resp] of Object.entries(knowledgeResponses)) {
+        if (q.includes(key)) {
+          replyText = resp;
+          break;
+        }
       }
     }
   }
@@ -210,7 +226,7 @@ module.exports = async function handler(req, res) {
       replyText = `Mohon maaf kak! Toko resmi *Aura Footwear* saat ini khusus melayani penjualan aneka *sepatu pria* (pantofel kerja, safety proyek, kasual, dan sneakers). Kami belum menyediakan ${ragResult.items}. 🙏\n\nJika kakak membutuhkan rekomendasi sepatu kerja kantor atau safety proyek, silakan tanyakan pada kami ya! 😊`;
     } else {
       const apiKey = process.env.GROQ_API_KEY;
-      const modelToUse = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+      const modelToUse = process.env.GROQ_MODEL || "qwen/qwen3.8-27b";
       const ragContext = ragResult.context;
 
       if (!apiKey) {
