@@ -30,12 +30,13 @@ function formatWhatsAppText(text) {
 }
 
 const stopWords = new Set([
-  "sepatu", "pria", "yang", "ada", "apakah", "jual", "dong", "buat", "untuk",
-  "warna", "bisa", "kami", "atau", "saya", "halo", "min", "ini", "itu", "dan",
-  "dari", "ke", "di", "mau", "rekomendasi", "toko", "punya", "apa", "aja",
-  "saja", "kak", "gan", "mas", "koleksi", "katalog", "daftar", "produk",
-  "terbaik", "paling", "bagus", "mana", "sih", "ya", "kan", "gimana",
-  "bagaimana", "tolong", "kasih", "info", "minta", "lihat", "cari"
+  "sepatu", "sepeatu", "spatu", "sepatuu", "shoes", "shoe", "pria", "yang", "ada", "apakah", "jual",
+  "dong", "buat", "untuk", "warna", "bisa", "kami", "atau", "saya", "halo", "min", "ini",
+  "itu", "dan", "dari", "ke", "di", "mau", "rekomendasi", "toko", "punya", "apa", "aja",
+  "saja", "kak", "gan", "mas", "koleksi", "katalog", "daftar", "produk", "terbaik",
+  "paling", "bagus", "mana", "sih", "ya", "kan", "gimana", "bagaimana", "tolong",
+  "kasih", "info", "minta", "lihat", "cari", "stok", "stock", "ready", "semua", "etalase",
+  "lengkap", "semuanya", "tersedia", "list", "macam", "jenis", "model"
 ]);
 
 const outOfScopeItems = [
@@ -45,7 +46,9 @@ const outOfScopeItems = [
 ];
 
 function findRAGContext(query) {
-  const q = query.toLowerCase();
+  let q = query.toLowerCase()
+    .replace(/\b(sepeatu|spatu|sepatuu)\b/g, "sepatu")
+    .replace(/\b(stok|stock|ready)\b/g, "tersedia");
 
   // 1. Deteksi jika menanyakan barang di luar etalase sepatu
   const foundOutOfScope = outOfScopeItems.filter(item => q.includes(item));
@@ -57,7 +60,18 @@ function findRAGContext(query) {
     };
   }
 
-  // 2. Filter kata kunci pencarian yang spesifik
+  // 2. Deteksi apakah pengguna meminta seluruh katalog / daftar sepatu yang tersedia
+  const isCatalogQuery = (
+    q.includes("apa saja") || q.includes("apa aja") ||
+    q.includes("katalog") || q.includes("daftar") ||
+    q.includes("semua") || q.includes("list") ||
+    q.includes("koleksi") || q.includes("etalase") ||
+    q.includes("punya apa") || q.includes("ada apa") ||
+    q.includes("tersedia apa") || q.includes("stok apa") ||
+    q.includes("sepatu apa")
+  );
+
+  // 3. Filter kata kunci pencarian yang spesifik
   const words = q.replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
 
   const scored = products.map(p => {
@@ -72,23 +86,38 @@ function findRAGContext(query) {
   scored.sort((a, b) => b.score - a.score);
   const matched = scored.filter(s => s.score > 0).map(s => s.product);
 
-  // 3. Jika pengguna mencari kata kunci spesifik tetapi tidak ada satu pun produk sepatu yang cocok
-  if (words.length > 0 && matched.length === 0) {
+  let list = [];
+  if (isCatalogQuery) {
+    // Tampilkan seluruh 10 produk jika diminta katalog / stok / apa saja yang ada
+    list = products;
+  } else if (matched.length > 0) {
+    // Tampilkan produk yang cocok spesifik (maks 3 produk terbaik)
+    list = matched.slice(0, 3);
+  } else if (words.length > 0) {
+    // Pengguna mencari kata kunci tertentu di luar sepatu
     return {
       outOfScope: true,
       items: words.join(", "),
       context: ""
     };
+  } else {
+    // Pertanyaan umum tanpa kata kunci spesifik
+    list = products;
   }
 
-  const list = matched.length > 0 ? matched.slice(0, 3) : products.slice(0, 3);
-
-  const context = list.map(p => {
+  let context = list.map((p, idx) => {
     const hargaFmt = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(p.harga));
+    if (isCatalogQuery || list.length === 10) {
+      return `${idx + 1}. *${p.nama}* [${p.kategori}] - ${hargaFmt}`;
+    }
     return `• *${p.nama}* [Kategori: ${p.kategori}]\n  Harga: ${hargaFmt}\n  Deskripsi: ${p.deskripsi}\n  Link Shopee: ${p.link}`;
   }).join("\n\n");
 
-  return { outOfScope: false, context, matchedCount: matched.length };
+  if (isCatalogQuery || list.length === 10) {
+    context += "\n\nLink Lapak Shopee Resmi: https://shopee.co.id/list/Sepatu%20Pria";
+  }
+
+  return { outOfScope: false, context, matchedCount: list.length, isAll: (isCatalogQuery || list.length === 10) };
 }
 
 // Helper untuk membaca raw body jika Vercel belum melakukan parsing
@@ -239,10 +268,11 @@ Jawab dengan ramah, sopan, to the point, dan sangat rapi dalam format pesan What
 
 ATURAN PENTING:
 1. Gunakan SATU bintang untuk cetak tebal, contoh: *teks tebal*.
-2. Gunakan bullet point (•) untuk mendaftar produk.
+2. Gunakan bullet point (•) atau nomor untuk mendaftar produk.
 3. Sertakan nama, harga Rupiah resmi, dan link Shopee ketika merekomendasikan produk.
 4. Jawab HANYA berdasarkan konteks produk resmi di bawah.
-5. PENTING: Jika pengguna menanyakan barang di luar produk sepatu (seperti laptop, hp, elektronik, makanan, pakaian, dll) atau jika produk tidak tersedia di katalog, TOLAK DENGAN RAMAH dan jelaskan bahwa toko hanya menjual sepatu pria. JANGAN PERNAH merekomendasikan sepatu jika pengguna tidak mencari sepatu!
+5. Jika pengguna menanyakan seluruh katalog, daftar produk, atau sepatu apa saja yang stok/tersedia, tampilkan SELURUH 10 PRODUK SEPATU di konteks secara ringkas, rapi, dan lengkap!
+6. PENTING: Jika pengguna menanyakan barang di luar produk sepatu (seperti laptop, hp, elektronik, makanan, pakaian, dll) atau jika produk tidak tersedia di katalog, TOLAK DENGAN RAMAH dan jelaskan bahwa toko hanya menjual sepatu pria. JANGAN PERNAH merekomendasikan sepatu jika pengguna tidak mencari sepatu!
 
 KONTEKS PRODUK RESMI SHOPEE:
 ${ragContext}`;
@@ -253,7 +283,7 @@ ${ragContext}`;
               { role: "system", content: systemPrompt },
               { role: "user", content: message }
             ],
-            max_tokens: 1000
+            max_tokens: 650
           });
 
           replyText = formatWhatsAppText(completion.choices[0]?.message?.content || "");
