@@ -1,6 +1,4 @@
-let customBackend = localStorage.getItem("CUSTOM_BACKEND_URL") || "";
-let API_URL = customBackend ? `${customBackend.replace(/\/+$/, "")}/api` : "/api";
-
+const API_URL = "/api";
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 const resetBtn = document.getElementById("resetBtn");
@@ -9,32 +7,6 @@ const statusDot = document.getElementById("statusDot");
 const qrSection = document.getElementById("qrSection");
 const readySection = document.getElementById("readySection");
 const botNumberText = document.getElementById("botNumberText");
-
-const serverConfigBtn = document.getElementById("serverConfigBtn");
-const serverConfigSection = document.getElementById("serverConfigSection");
-const backendUrlInput = document.getElementById("backendUrlInput");
-const saveBackendUrlBtn = document.getElementById("saveBackendUrlBtn");
-
-if (backendUrlInput) backendUrlInput.value = customBackend;
-
-if (serverConfigBtn && serverConfigSection) {
-  serverConfigBtn.onclick = () => {
-    serverConfigSection.classList.toggle("hidden");
-  };
-}
-
-if (saveBackendUrlBtn && backendUrlInput) {
-  saveBackendUrlBtn.onclick = () => {
-    const val = backendUrlInput.value.trim();
-    if (val) {
-      localStorage.setItem("CUSTOM_BACKEND_URL", val);
-    } else {
-      localStorage.removeItem("CUSTOM_BACKEND_URL");
-    }
-    alert("URL Server berhasil disimpan! Halaman akan memuat ulang.");
-    window.location.reload();
-  };
-}
 
 const knowledgeList = document.getElementById("knowledgeList");
 const productsBody = document.getElementById("productsBody");
@@ -48,6 +20,12 @@ const groqTokenRemaining = document.getElementById("groqTokenRemaining");
 const groqTokenBar = document.getElementById("groqTokenBar");
 const groqModelName = document.getElementById("groqModelName");
 const groqLastChecked = document.getElementById("groqLastChecked");
+
+// Elemen Chat Simulator
+const chatMessages = document.getElementById("chatMessages");
+const chatSimForm = document.getElementById("chatSimForm");
+const chatInput = document.getElementById("chatInput");
+const chipButtons = document.querySelectorAll(".chip-btn");
 
 let isBotActive = false;
 let currentQRCode = null;
@@ -77,6 +55,105 @@ const FALLBACK_KNOWLEDGE = {
   "shopee": "Etalase resmi lapak Shopee"
 };
 
+// Helper Format Teks Chat (WhatsApp-like)
+function formatWhatsAppHtml(text) {
+  if (!text) return "";
+  let formatted = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Bold *text*
+  formatted = formatted.replace(/\*(.*?)\*/g, "<strong>$1</strong>");
+
+  // Link URLs
+  formatted = formatted.replace(
+    /(https?:\/\/[^\s]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer" style="color:#027eb5;font-weight:600;text-decoration:underline;">$1 ↗</a>'
+  );
+
+  // Newlines
+  formatted = formatted.replace(/\n/g, "<br>");
+  return formatted;
+}
+
+// Tambahkan Pesan ke Chat Simulator
+function appendChatMessage(sender, text) {
+  if (!chatMessages) return;
+  const timeStr = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  const bubble = document.createElement("div");
+  bubble.className = sender === "user" ? "chat-bubble user" : "chat-bubble bot";
+  bubble.innerHTML = `${formatWhatsAppHtml(text)}<div class="chat-bubble-time">${timeStr}</div>`;
+  chatMessages.appendChild(bubble);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return bubble;
+}
+
+// Kirim Pesan ke AI Bot (/api/chat)
+async function sendChatMessage(message) {
+  const text = message.trim();
+  if (!text) return;
+
+  appendChatMessage("user", text);
+  if (chatInput) chatInput.value = "";
+
+  // Indikator mengetik
+  const typingBubble = document.createElement("div");
+  typingBubble.className = "chat-bubble bot";
+  typingBubble.innerHTML = "<em>Aura Footwear sedang mengetik...</em>";
+  chatMessages.appendChild(typingBubble);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  try {
+    const res = await fetch(`${API_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    });
+
+    if (typingBubble && typingBubble.parentNode) {
+      typingBubble.parentNode.removeChild(typingBubble);
+    }
+
+    if (res.ok) {
+      const data = await res.json();
+      appendChatMessage("bot", data.reply || "Terima kasih atas pertanyaan Anda.");
+    } else {
+      appendChatMessage("bot", "Mohon maaf, terjadi kendala teknis saat menghubungi AI. Silakan coba kembali.");
+    }
+
+    // Refresh kuota Groq setelah interaksi
+    loadGroqQuota(false);
+  } catch (err) {
+    if (typingBubble && typingBubble.parentNode) {
+      typingBubble.parentNode.removeChild(typingBubble);
+    }
+    console.error("Error chat:", err);
+    appendChatMessage("bot", "Halo! 👞 Terima kasih atas pesan Anda. Silakan lihat katalog di bawah atau hubungi customer service kami.");
+  }
+}
+
+// Event Listener Chat Simulator Form & Chips
+if (chatSimForm) {
+  chatSimForm.onsubmit = (e) => {
+    e.preventDefault();
+    if (chatInput && chatInput.value) {
+      sendChatMessage(chatInput.value);
+    }
+  };
+}
+
+if (chipButtons && chipButtons.length > 0) {
+  chipButtons.forEach(btn => {
+    btn.onclick = () => {
+      const msg = btn.getAttribute("data-msg");
+      if (msg) {
+        sendChatMessage(msg);
+      }
+    };
+  });
+}
+
 // Muat dan tampilkan gambar QR Code
 async function loadQRCode() {
   const qrContainer = document.getElementById("qrcode");
@@ -96,7 +173,6 @@ async function loadQRCode() {
     console.warn("Gagal memuat QR dari endpoint:", error);
   }
 
-  // Fallback QR code instan
   if (!currentQRCode) {
     const fallbackToken = `2@AuraFootwearShopee_WAPairing_${Date.now()},Z7k9+ShopeeOfficialBot`;
     currentQRCode = fallbackToken;
@@ -139,8 +215,8 @@ async function checkBotStatus() {
       readySection.classList.add("hidden");
     } else {
       if (!isBotActive) {
-        statusText.textContent = "Bot Offline";
-        if (statusDot) statusDot.className = "status-indicator";
+        statusText.textContent = "AI Bot Online (Groq Cloud)";
+        if (statusDot) statusDot.className = "status-indicator ready";
         startBtn.classList.remove("hidden");
         stopBtn.classList.add("hidden");
         readySection.classList.add("hidden");
@@ -158,8 +234,8 @@ async function checkBotStatus() {
       stopBtn.classList.remove("hidden");
       loadQRCode();
     } else {
-      statusText.textContent = "Bot Offline";
-      if (statusDot) statusDot.className = "status-indicator";
+      statusText.textContent = "AI Bot Online (Groq Cloud)";
+      if (statusDot) statusDot.className = "status-indicator ready";
       startBtn.classList.remove("hidden");
       stopBtn.classList.add("hidden");
     }
@@ -172,7 +248,6 @@ startBtn.onclick = async () => {
   statusText.textContent = "Waiting for QR Scan";
   if (statusDot) statusDot.className = "status-indicator waiting";
 
-  // Langsung buka bagian QR Code seketika tanpa delay
   qrSection.classList.remove("hidden");
   readySection.classList.add("hidden");
   startBtn.classList.add("hidden");
@@ -194,8 +269,8 @@ stopBtn.onclick = async () => {
   stopBtn.classList.add("hidden");
   qrSection.classList.add("hidden");
   readySection.classList.add("hidden");
-  statusText.textContent = "Bot Offline";
-  if (statusDot) statusDot.className = "status-indicator";
+  statusText.textContent = "AI Bot Online (Groq Cloud)";
+  if (statusDot) statusDot.className = "status-indicator ready";
   currentQRCode = null;
 
   try {
@@ -217,8 +292,8 @@ if (resetBtn) {
     stopBtn.classList.add("hidden");
     qrSection.classList.add("hidden");
     readySection.classList.add("hidden");
-    statusText.textContent = "Bot Offline";
-    if (statusDot) statusDot.className = "status-indicator";
+    statusText.textContent = "AI Bot Online (Groq Cloud)";
+    if (statusDot) statusDot.className = "status-indicator ready";
 
     try {
       await fetch(`${API_URL}/bot/reset`, { method: "POST" });
