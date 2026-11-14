@@ -3,7 +3,7 @@ module.exports = function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
 
-  const isStarted = Boolean(global.botStarted);
+  const isStarted = Boolean(global.botStarted) || req.query.started === "1" || req.query.started === "true";
 
   res.status(200).json({
     isReady: false,

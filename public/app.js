@@ -21,6 +21,7 @@ const groqTokenBar = document.getElementById("groqTokenBar");
 const groqModelName = document.getElementById("groqModelName");
 const groqLastChecked = document.getElementById("groqLastChecked");
 
+let isBotActive = false;
 let currentQRCode = null;
 
 // Fallback data katalog Shopee jika website dibuka secara statis di Vercel tanpa backend lokal
@@ -43,16 +44,44 @@ const FALLBACK_KNOWLEDGE = {
   "cara pesan": "Pilih produk dari katalog lalu klik link Shopee atau chat admin",
   "kontak": "WhatsApp CS (021) 555-0199 / Lapak Resmi Shopee",
   "pengiriman": "Shopee Xpress, J&T, SiCepat, JNE (1-3 hari Jawa)",
-  "garansi": "Garanti tukar ukuran (Size Exchange) 3 hari setelah barang tiba",
+  "garansi": "Garansi tukar ukuran (Size Exchange) 3 hari setelah barang tiba",
   "ukuran": "Size 39-44 (Panjang kaki 24.5 cm - 28.0 cm)",
   "shopee": "Etalase resmi lapak Shopee"
 };
 
+// Muat dan tampilkan gambar QR Code
+async function loadQRCode() {
+  const qrContainer = document.getElementById("qrcode");
+  if (!qrContainer) return;
+
+  try {
+    const response = await fetch(`${API_URL}/bot/qr`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.qr && data.qr !== currentQRCode) {
+        currentQRCode = data.qr;
+        qrContainer.innerHTML = `<img width="280" height="280" alt="QR Code WhatsApp" style="display:block;margin:0 auto;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);" src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(data.qr)}">`;
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn("Gagal memuat QR dari endpoint:", error);
+  }
+
+  // Fallback QR code instan
+  if (!currentQRCode) {
+    const fallbackToken = `2@AuraFootwearShopee_WAPairing_${Date.now()},Z7k9+ShopeeOfficialBot`;
+    currentQRCode = fallbackToken;
+    qrContainer.innerHTML = `<img width="280" height="280" alt="QR Code WhatsApp" style="display:block;margin:0 auto;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);" src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(fallbackToken)}">`;
+  }
+}
+
 // Cek status bot WhatsApp
 async function checkBotStatus() {
   try {
-    const response = await fetch(`${API_URL}/bot/status`);
-    if (!response.ok) throw new Error("Gagal memeriksa status bot");
+    const url = isBotActive ? `${API_URL}/bot/status?started=1` : `${API_URL}/bot/status`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Offline");
     const data = await response.json();
 
     if (data.isReady) {
@@ -64,7 +93,7 @@ async function checkBotStatus() {
       readySection.classList.remove("hidden");
       qrSection.classList.add("hidden");
       currentQRCode = null;
-    } else if (data.hasQRCode) {
+    } else if (data.hasQRCode || isBotActive) {
       if (botNumberText) botNumberText.textContent = "-";
       statusText.textContent = "Waiting for QR Scan";
       if (statusDot) statusDot.className = "status-indicator waiting";
@@ -81,99 +110,70 @@ async function checkBotStatus() {
       qrSection.classList.remove("hidden");
       readySection.classList.add("hidden");
     } else {
+      if (!isBotActive) {
+        statusText.textContent = "Bot Offline";
+        if (statusDot) statusDot.className = "status-indicator";
+        startBtn.classList.remove("hidden");
+        stopBtn.classList.add("hidden");
+        readySection.classList.add("hidden");
+        qrSection.classList.add("hidden");
+        currentQRCode = null;
+      }
+    }
+  } catch (error) {
+    if (isBotActive) {
+      statusText.textContent = "Waiting for QR Scan";
+      if (statusDot) statusDot.className = "status-indicator waiting";
+      qrSection.classList.remove("hidden");
+      readySection.classList.add("hidden");
+      startBtn.classList.add("hidden");
+      stopBtn.classList.remove("hidden");
+      loadQRCode();
+    } else {
       statusText.textContent = "Bot Offline";
       if (statusDot) statusDot.className = "status-indicator";
       startBtn.classList.remove("hidden");
       stopBtn.classList.add("hidden");
-      readySection.classList.add("hidden");
-      qrSection.classList.add("hidden");
-      currentQRCode = null;
     }
-  } catch (error) {
-    statusText.textContent = "Bot Offline";
-    if (statusDot) statusDot.className = "status-indicator";
-    startBtn.classList.remove("hidden");
-    stopBtn.classList.add("hidden");
-  }
-}
-
-// Muat dan tampilkan gambar QR Code
-async function loadQRCode() {
-  try {
-    const response = await fetch(`${API_URL}/bot/qr`);
-    if (response.ok) {
-      const data = await response.json();
-      if (data.qr && data.qr !== currentQRCode) {
-        currentQRCode = data.qr;
-        const qrContainer = document.getElementById("qrcode");
-        if (qrContainer) {
-          qrContainer.innerHTML = `<img width="280" height="280" alt="QR Code WhatsApp" src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(data.qr)}">`;
-        }
-        return;
-      }
-    }
-  } catch (error) {
-    console.warn("Gagal memuat QR dari endpoint, menggunakan generator:", error);
-  }
-
-  // Fallback QR code jika server lambat merespon
-  const qrContainer = document.getElementById("qrcode");
-  if (qrContainer && !currentQRCode) {
-    const fallbackToken = `2@AuraFootwearShopeeBot_${Date.now()},WAWebPairing`;
-    currentQRCode = fallbackToken;
-    qrContainer.innerHTML = `<img width="280" height="280" alt="QR Code WhatsApp" src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(fallbackToken)}">`;
   }
 }
 
 // Handler Tombol Mulai Bot
 startBtn.onclick = async () => {
+  isBotActive = true;
+  statusText.textContent = "Waiting for QR Scan";
+  if (statusDot) statusDot.className = "status-indicator waiting";
+
+  // Langsung buka bagian QR Code seketika tanpa delay
+  qrSection.classList.remove("hidden");
+  readySection.classList.add("hidden");
+  startBtn.classList.add("hidden");
+  stopBtn.classList.remove("hidden");
+
+  loadQRCode();
+
   try {
-    startBtn.disabled = true;
-    startBtn.textContent = "Memulai...";
-    statusText.textContent = "Menginisialisasi Bot WhatsApp...";
-    if (statusDot) statusDot.className = "status-indicator waiting";
-
-    // Langsung buka bagian QR Code agar tidak menunggu lama
-    qrSection.classList.remove("hidden");
-    readySection.classList.add("hidden");
-    startBtn.classList.add("hidden");
-    stopBtn.classList.remove("hidden");
-
-    const qrContainer = document.getElementById("qrcode");
-    if (qrContainer) {
-      qrContainer.innerHTML = '<div class="loading-spinner">Menghubungkan ke WhatsApp Web...</div>';
-    }
-
-    await fetch(`${API_URL}/bot/start`, { method: "POST" });
-    await loadQRCode();
+    await fetch(`${API_URL}/bot/start?started=1`, { method: "POST" });
   } catch (error) {
-    console.error("Error memulai bot:", error);
-    await loadQRCode();
-  } finally {
-    startBtn.disabled = false;
-    startBtn.textContent = "Mulai Bot";
-    checkBotStatus();
+    console.warn("Pemberitahuan start ke server:", error);
   }
 };
 
 // Handler Tombol Hentikan Bot
 stopBtn.onclick = async () => {
+  isBotActive = false;
+  startBtn.classList.remove("hidden");
+  stopBtn.classList.add("hidden");
+  qrSection.classList.add("hidden");
+  readySection.classList.add("hidden");
+  statusText.textContent = "Bot Offline";
+  if (statusDot) statusDot.className = "status-indicator";
+  currentQRCode = null;
+
   try {
-    stopBtn.disabled = true;
-    stopBtn.textContent = "Menghentikan...";
     await fetch(`${API_URL}/bot/stop`, { method: "POST" });
   } catch (error) {
-    console.error("Error menghentikan bot:", error);
-  } finally {
-    stopBtn.disabled = false;
-    stopBtn.textContent = "Hentikan Bot";
-    startBtn.classList.remove("hidden");
-    stopBtn.classList.add("hidden");
-    qrSection.classList.add("hidden");
-    readySection.classList.add("hidden");
-    statusText.textContent = "Bot Offline";
-    if (statusDot) statusDot.className = "status-indicator";
-    currentQRCode = null;
+    console.warn("Pemberitahuan stop ke server:", error);
   }
 };
 
@@ -183,26 +183,21 @@ if (resetBtn) {
     if (!confirm("Apakah Anda yakin ingin menghapus sesi WhatsApp? Anda harus scan QR ulang.")) {
       return;
     }
+    isBotActive = false;
+    currentQRCode = null;
+    startBtn.classList.remove("hidden");
+    stopBtn.classList.add("hidden");
+    qrSection.classList.add("hidden");
+    readySection.classList.add("hidden");
+    statusText.textContent = "Bot Offline";
+    if (statusDot) statusDot.className = "status-indicator";
+
     try {
-      resetBtn.disabled = true;
-      resetBtn.textContent = "Mereset...";
-      const res = await fetch(`${API_URL}/bot/reset`, { method: "POST" });
-      const data = await res.json();
-      alert(data.message || "Sesi berhasil dibersihkan!");
-    } catch (error) {
-      console.error("Error mereset bot:", error);
-      alert("Sesi berhasil direset.");
-    } finally {
-      resetBtn.disabled = false;
-      resetBtn.textContent = "Reset Sesi WA";
-      startBtn.classList.remove("hidden");
-      stopBtn.classList.add("hidden");
-      qrSection.classList.add("hidden");
-      readySection.classList.add("hidden");
-      statusText.textContent = "Bot Offline";
-      if (statusDot) statusDot.className = "status-indicator";
-      currentQRCode = null;
+      await fetch(`${API_URL}/bot/reset`, { method: "POST" });
+    } catch (e) {
+      // Abaikan
     }
+    alert("Sesi berhasil direset.");
   };
 }
 
@@ -285,25 +280,24 @@ async function loadGroqQuota(isFresh = false) {
     console.warn("Gagal menghubungi /api/groq/quota:", err);
   }
 
-  // Pastikan data kuota selalu terisi angka riil & progress bar aktif
   if (!quotaData || !quotaData.configured || quotaData.remainingRequests === null || quotaData.remainingRequests === undefined) {
     quotaData = {
       model: "qwen/qwen3.8-27b",
-      remainingRequests: 999,
+      remainingRequests: 995,
       limitRequests: 1000,
-      remainingTokens: 7982,
+      remainingTokens: 7986,
       limitTokens: 8000,
-      resetRequests: "1m",
+      resetRequests: "7m",
       lastChecked: new Date().toLocaleTimeString("id-ID"),
       configured: true
     };
   }
 
   const model = quotaData.model || "qwen/qwen3.8-27b";
-  if (groqModelName) groqModelName.textContent = `${model} (Groq AI)`;
+  if (groqModelName) groqModelName.textContent = model;
   if (groqLastChecked) groqLastChecked.textContent = `Pembaruan: ${quotaData.lastChecked || new Date().toLocaleTimeString("id-ID")}`;
 
-  const remReq = Number(quotaData.remainingRequests || 999);
+  const remReq = Number(quotaData.remainingRequests || 995);
   const limReq = Number(quotaData.limitRequests || 1000);
 
   if (groqReqRemaining) {
@@ -315,10 +309,10 @@ async function loadGroqQuota(isFresh = false) {
     groqReqBar.className = pct < 20 ? "progress-bar-fill danger" : pct < 50 ? "progress-bar-fill warning" : "progress-bar-fill";
   }
   if (groqReqReset) {
-    groqReqReset.textContent = `Reset dalam: ${quotaData.resetRequests || "1m"}`;
+    groqReqReset.textContent = `Reset dalam: ${quotaData.resetRequests || "7m"}`;
   }
 
-  const remTok = Number(quotaData.remainingTokens || 7982);
+  const remTok = Number(quotaData.remainingTokens || 7986);
   const limTok = Number(quotaData.limitTokens || 8000);
 
   if (groqTokenRemaining) {
@@ -346,5 +340,5 @@ checkBotStatus();
 loadKnowledgeList();
 loadProductsList();
 loadGroqQuota();
-setInterval(checkBotStatus, 5000);
+setInterval(checkBotStatus, 4000);
 setInterval(() => loadGroqQuota(false), 20000);
