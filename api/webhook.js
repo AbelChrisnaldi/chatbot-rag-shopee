@@ -44,6 +44,33 @@ function findRAGContext(query) {
   }).join("\n\n");
 }
 
+// Helper untuk membaca raw body jika Vercel belum melakukan parsing
+async function getRawBody(req) {
+  if (req.body && typeof req.body === "object" && Object.keys(req.body).length > 0) {
+    return req.body;
+  }
+  return new Promise((resolve) => {
+    let data = "";
+    req.on("data", chunk => { data += chunk; });
+    req.on("end", () => {
+      if (!data) return resolve({});
+      try {
+        resolve(JSON.parse(data));
+      } catch (e) {
+        // Coba urlencoded
+        try {
+          const params = new URLSearchParams(data);
+          const obj = {};
+          for (const [k, v] of params.entries()) obj[k] = v;
+          resolve(obj);
+        } catch (e2) {
+          resolve({ raw: data });
+        }
+      }
+    });
+  });
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -59,10 +86,20 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Fonnte mengirim parameter: message, sender, name
-  const body = req.body || {};
-  const message = (body.message || body.text || "").trim();
-  const sender = (body.sender || body.from || "").trim();
+  // Parse body dari berbagai kemungkinan format Fonnte
+  const parsedBody = await getRawBody(req);
+  const body = Object.keys(parsedBody).length > 0 ? parsedBody : (req.body || {});
+
+  let message = (body.message || body.text || "").trim();
+  let sender = (body.sender || body.from || "").trim();
+
+  // Jika payload Fonnte berupa string multipart / raw
+  if (!message && body.raw) {
+    const msgMatch = body.raw.match(/name="message"[\r\n]+([^\r\n]+)/);
+    if (msgMatch) message = msgMatch[1].trim();
+    const senderMatch = body.raw.match(/name="sender"[\r\n]+([^\r\n]+)/);
+    if (senderMatch) sender = senderMatch[1].trim();
+  }
 
   if (!message) {
     return res.status(200).json({ status: true, message: "Tidak ada pesan" });
@@ -91,7 +128,7 @@ module.exports = async function handler(req, res) {
     const ragContext = findRAGContext(message);
 
     if (!apiKey) {
-      replyText = `Halo! 👞 Berikut rekomendasi produk dari etalase Shopee kami:\n\n${ragContext}\n\nAda model atau ukuran tertentu yang ingin Anda tanyakan lebih lanjut? 😊`;
+      replyText = `Halo! 👞 Berikut rekomendasi produk dari etalase Shopee kami:\n\n${ragContext}\n\nSilakan klik link Shopee di atas untuk info pemesanan lengkap! 😊`;
     } else {
       try {
         const groq = new Groq({ apiKey });
@@ -119,13 +156,13 @@ ${ragContext}`;
         replyText = formatWhatsAppText(completion.choices[0]?.message?.content || "");
       } catch (err) {
         console.error("Groq AI Error in Webhook:", err);
-        replyText = `Halo! 👞 Berikut rekomendasi produk dari katalog Shopee kami:\n\n${ragContext}\n\nSilakan klik tautan Shopee di atas untuk melakukan pemesanan! 😊`;
+        replyText = `Halo! 👞 Berikut rekomendasi produk dari etalase Shopee kami:\n\n${ragContext}\n\nSilakan klik link Shopee di atas untuk info pemesanan lengkap! 😊`;
       }
     }
   }
 
-  // 4. Jika ada token Fonnte, kita kirimkan via API Fonnte
-  const fonnteToken = process.env.FONNTE_TOKEN || "bEkcpRQv1AhK4uK5PsZX";
+  // 4. Kirim balasan via Fonnte Send API jika ada sender
+  const fonnteToken = process.env.FONNTE_TOKEN;
   if (fonnteToken && sender) {
     try {
       const fetch = global.fetch || require("node-fetch");
@@ -145,7 +182,7 @@ ${ragContext}`;
     }
   }
 
-  // 5. Kembalikan JSON (Fonnte mendukung auto-reply otomatis via respons webhook)
+  // 5. Kembalikan JSON (untuk auto-reply webhook)
   return res.status(200).json({
     reply: replyText,
     response: replyText,
